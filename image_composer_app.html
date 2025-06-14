@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>圖片合成範例</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      min-height: 100vh;
+      background: #222;
+      color: #fff;
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+    .controls {
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+      background: #333;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .controls label {
+      display: block;
+      margin-top: 10px;
+    }
+    .controls input[type="text"], .controls input[type="file"] {
+      width: 100%;
+      padding: 4px;
+      margin-top: 4px;
+    }
+    .controls button {
+      margin-top: 15px;
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      font-family: 'Noto Sans TC', sans-serif;
+      background: #555;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    #downloadBtn {
+      background: #2ecc71;
+      color: #fff;
+    }
+    #downloadBtn:hover {
+      background: #145a32;
+    }
+    .error-msg {
+      color: red;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    canvas {
+      flex: 1;
+      width: 100%;
+      max-width: 540px;
+      background: #444;
+      border: 1px solid #000;
+      margin: auto;
+      display: block;
+      cursor: default;
+    }
+    @media (min-width: 768px) {
+      body { flex-direction: row; }
+      .controls { width: 300px; }
+      canvas { height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <label for="photoInput">上傳照片</label>
+    <input type="file" id="photoInput" accept="image/*" />
+
+    <label for="text1Input">Coser名稱</label>
+    <input type="text" id="text1Input" value="Coser名稱" />
+
+    <label for="boothInput">攤位編號</label>
+    <input type="text" id="boothInput" value="A01" />
+
+    <button id="addItemBtn">新增項目與價錢</button>
+    <div id="itemsContainer"></div>
+    <div id="errorMsg" class="error-msg"></div>
+
+    <button id="resetBtn">重設</button>
+    <button id="downloadBtn">下載圖片</button>
+  </div>
+
+  <canvas id="c" width="1080" height="1350"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const text1Input = document.getElementById('text1Input');
+    const boothInput = document.getElementById('boothInput');
+    const photoInput = document.getElementById('photoInput');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const addItemBtn = document.getElementById('addItemBtn');
+    const itemsContainer = document.getElementById('itemsContainer');
+    const errorMsg = document.getElementById('errorMsg');
+
+    let items = [];
+
+    let text1 = {
+      value: text1Input.value,
+      x: canvas.width - 50,
+      y: 140,
+      size: 48
+    };
+
+    let booth = {
+      value: boothInput.value,
+      x: canvas.width - 50,
+      y: 80,
+      size: 36
+    };
+
+    let portrait = null;
+    let portraitX = 0, portraitY = 0;
+    let portraitScale = 1;
+
+    const background = new Image();
+    background.crossOrigin = 'anonymous';
+    background.src = 'https://static.wixstatic.com/media/3d17ac_652b541916714457963bf8eb5d9c78fa~mv2.png';
+
+    function drawAll() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (portrait) {
+        const sw = portrait.naturalWidth * portraitScale;
+        const sh = portrait.naturalHeight * portraitScale;
+        ctx.drawImage(portrait, portraitX, portraitY, sw, sh);
+      }
+
+      ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+
+      ctx.font = `${text1.size}px 'Noto Sans TC'`;
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillText(text1.value, text1.x, text1.y);
+
+      ctx.font = `${booth.size}px 'Noto Sans TC'`;
+      ctx.fillText(booth.value, booth.x, booth.y);
+
+      ctx.font = "32px 'Noto Sans TC'";
+      items.forEach((item, index) => {
+        const y = 325 + index * 78;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#235f9b';
+        ctx.fillText(item.name || '', 120, y);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#e13d4b';
+        ctx.fillText(item.price || '', canvas.width - 120, y);
+      });
+    }
+
+    function enableControls() {
+      [text1Input, boothInput].forEach(el => {
+        el.addEventListener('input', () => {
+          text1.value = text1Input.value;
+          booth.value = boothInput.value;
+          drawAll();
+        });
+      });
+
+      resetBtn.addEventListener('click', () => {
+        items = [];
+        itemsContainer.innerHTML = '';
+        errorMsg.textContent = '';
+        text1Input.value = 'Coser名稱';
+        boothInput.value = 'A01';
+        text1.value = text1Input.value;
+        booth.value = boothInput.value;
+        drawAll();
+      });
+
+      addItemBtn.addEventListener('click', () => {
+        if (items.length >= 13) {
+          errorMsg.textContent = '不能新增更多了！';
+          return;
+        }
+        errorMsg.textContent = '';
+
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.gap = '10px';
+        wrapper.style.marginTop = '8px';
+        wrapper.style.alignItems = 'center';
+
+        const itemInput = document.createElement('input');
+        itemInput.type = 'text';
+        itemInput.placeholder = `項目 ${items.length + 1}`;
+        itemInput.style.flex = '1';
+
+        const priceInput = document.createElement('input');
+        priceInput.type = 'number';
+        priceInput.placeholder = '價格';
+        priceInput.style.width = '80px';
+
+        const deleteBtn = document.createElement('span');
+        deleteBtn.textContent = '刪除';
+        deleteBtn.style.fontSize = '8px';
+        deleteBtn.style.fontFamily = 'Noto Sans TC, sans-serif';
+        deleteBtn.style.color = 'red';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.style.marginLeft = '6px';
+        wrapper.appendChild(itemInput);
+        wrapper.appendChild(priceInput);
+        wrapper.appendChild(deleteBtn);
+        itemsContainer.appendChild(wrapper);
+
+        const item = { name: '', price: '' };
+        items.push(item);
+
+        itemInput.addEventListener('input', () => {
+          item.name = itemInput.value;
+          drawAll();
+        });
+
+        priceInput.addEventListener('input', () => {
+          item.price = priceInput.value;
+          drawAll();
+        });
+
+        deleteBtn.addEventListener('click', () => {
+          items = items.filter(i => i !== item);
+          itemsContainer.removeChild(wrapper);
+          drawAll();
+        });
+
+        itemInput.addEventListener('input', () => {
+          item.name = itemInput.value;
+          drawAll();
+        });
+
+        priceInput.addEventListener('input', () => {
+          item.price = priceInput.value;
+          drawAll();
+        });
+      });
+
+      photoInput.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          portrait = new Image();
+          portrait.onload = () => {
+            const targetWidth = 500;
+            portraitScale = targetWidth / portrait.naturalWidth;
+            const sw = portrait.naturalWidth * portraitScale;
+            const sh = portrait.naturalHeight * portraitScale;
+            portraitX = (canvas.width - sw) / 2;
+            portraitY = 0;
+            drawAll();
+          };
+          portrait.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      downloadBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = 'poster.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    background.onload = () => {
+      drawAll();
+      enableControls();
+    }
+  </script>
+</body>
+</html>
